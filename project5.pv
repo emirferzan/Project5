@@ -1,0 +1,101 @@
+free c : channel.
+
+free A : bitstring.
+free B : bitstring.
+free KDC : bitstring.
+
+free Kma : bitstring [private].
+free Kmb : bitstring [private].
+
+fun senc(bitstring, bitstring) : bitstring.
+reduc forall m:bitstring, k:bitstring;
+  sdec(senc(m,k),k) = m.
+
+fun pair(bitstring, bitstring) : bitstring.
+reduc forall x:bitstring, y:bitstring;
+  fst(pair(x,y)) = x.
+reduc forall x:bitstring, y:bitstring;
+  snd(pair(x,y)) = y.
+
+
+event A_requests_key(bitstring, bitstring).
+event KDC_sends_key_to_A(bitstring, bitstring, bitstring).
+event KDC_sends_key_to_B(bitstring, bitstring, bitstring).
+event A_accepts_key(bitstring, bitstring, bitstring).
+event B_accepts_key(bitstring, bitstring, bitstring).
+
+event A_sends_session_msg(bitstring, bitstring).
+event B_receives_session_msg(bitstring, bitstring).
+
+
+free secretMsg : bitstring [private].
+
+
+
+query attacker(secretMsg).
+
+
+query a:bitstring, b:bitstring, ks:bitstring;
+  event(A_accepts_key(a,b,ks)) ==> event(KDC_sends_key_to_A(a,b,ks)).
+
+
+query a:bitstring, b:bitstring, ks:bitstring;
+  event(B_accepts_key(a,b,ks)) ==> event(KDC_sends_key_to_B(a,b,ks)).
+
+
+query ks:bitstring, msg:bitstring;
+  event(B_receives_session_msg(ks,msg)) ==> event(A_sends_session_msg(ks,msg)).
+
+(* -----------------------------
+   Part 1 
+   ----------------------------- *)
+
+   (* TODO:
+   - key translation with forwarding
+   - A -> KDC request
+   - KDC sends something back to A
+   - A forwards part to B
+   - then session using Ks
+*)
+
+(* -----------------------------
+   Part 2: Key Distribution
+   ----------------------------- *)
+
+let processA =
+  event A_requests_key(A,B);
+  out(c, pair(A,B));
+
+
+  in(c, msgA:bitstring);
+  let ksA = sdec(msgA,Kma) in
+  event A_accepts_key(A,B,ksA);
+
+  event A_sends_session_msg(ksA,secretMsg);
+  out(c, senc(secretMsg,ksA)).
+
+let processB =
+
+  in(c, msgB:bitstring);
+  let ksB = sdec(msgB,Kmb) in
+  event B_accepts_key(A,B,ksB);
+
+  in(c, encryptedSessionMsg:bitstring);
+  let receivedMsg = sdec(encryptedSessionMsg,ksB) in
+  event B_receives_session_msg(ksB,receivedMsg).
+
+let processKDC =
+  in(c, request:bitstring);
+  let requester = fst(request) in
+  let responder = snd(request) in
+
+  new Ks:bitstring;
+
+  event KDC_sends_key_to_A(requester,responder,Ks);
+  out(c, senc(Ks,Kma));
+
+  event KDC_sends_key_to_B(requester,responder,Ks);
+  out(c, senc(Ks,Kmb)).
+
+process
+  (!processA) | (!processB) | (!processKDC)
