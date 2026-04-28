@@ -1,0 +1,81 @@
+type key.
+type nonce.
+type id.
+
+free c_A_KTC:channel.
+free c_KTC_A:channel.
+free c_A_B:channel.
+free Kma:key [private].
+free Kmb:key [private].
+
+fun nonce_to_bitstring(nonce):bitstring [data,typeConverter].
+fun bitstring_to_nonce(bitstring):nonce [data,typeConverter].
+fun bitstring_to_key(bitstring):key [data,typeConverter].
+fun key_to_bitstring(key):bitstring [data,typeConverter].
+
+fun senc(bitstring, key) : bitstring.
+reduc forall m:bitstring, k:key;
+  sdec(senc(m,k),k) = m.
+
+fun Mac(bitstring,key):bitstring.
+
+event A_requests_key(key).
+event KTC_sends_key_to_A(key).
+event A_sends_session(key).
+
+event A_authenticates_KTC(id,id).
+event KTC_authenticates_A(id,id).
+event B_authenticates_A(id,id).
+
+query attacker(Kma); attacker(Kmb).
+
+query id_A:id, id_KTC:id, k:key;
+    event(KTC_authenticates_A(id_A, id_KTC)) ==> event(A_requests_key(k)).
+query id_A:id, id_KTC:id, k:key;
+    event(A_authenticates_KTC(id_A, id_KTC)) ==> event(KTC_sends_key_to_A(k)).
+query id_A:id, id_B:id, k:key;
+    event(B_authenticates_A(id_A, id_B)) ==> event(A_sends_session(k)).
+
+let A(id_A:id) =
+new Ks:key;
+new N1:nonce;
+let M1 = senc((Ks, N1), Kma) in
+event A_requests_key(Ks);
+let I1 = Mac((id_A, N1), Ks) in
+out(c_A_KTC, (id_A, M1, I1));
+
+in(c_KTC_A, (id_KTC_:id, M3_:bitstring, I2_:bitstring));
+let (M2_:bitstring, N2_:nonce) = sdec(M3_, Kma) in
+if Mac((id_KTC_, N1, N2_), Ks) = I2_ then event A_authenticates_KTC(id_A, id_KTC_);
+new N3:nonce;
+let I3 = Mac((id_A, N3), Ks) in
+let M4 = senc(nonce_to_bitstring(N3), Ks) in
+event A_sends_session(Ks);
+out(c_A_B, (id_A, M2_, M4, I3));
+0.
+
+let B(id_B:id) =
+in(c_A_B, (id_A_:id, M2_:bitstring, M4_:bitstring, I3_:bitstring));
+let Ks_ = sdec(M2_, Kmb) in
+let N3_ = sdec(M4_, bitstring_to_key(Ks_)) in
+if Mac((id_A_, N3_), bitstring_to_key(Ks_)) = I3_ then event B_authenticates_A(id_A_, id_B);
+0.
+
+let KTC(id_KTC:id) = 
+in(c_A_KTC, (id_A_:id, M1_:bitstring, I1_:bitstring));
+let (Ks_:key, N1_:nonce) = sdec(M1_, Kma) in
+if Mac((id_A_, N1_), Ks_) = I1_ then event KTC_authenticates_A(id_A_, id_KTC);
+new N2:nonce;
+let I2 = Mac((id_KTC, N1_, N2), Ks_) in
+let M2 = senc(key_to_bitstring(Ks_), Kmb) in
+let M3 = senc((M2, N2), Kma) in
+event KTC_sends_key_to_A(Ks_);
+out(c_KTC_A, (id_KTC, M3, I2));
+0.
+
+process
+new id_A:id;
+new id_B:id;
+new id_KTC:id;
+((!A(id_A)) | (!B(id_B)) | (!KTC(id_KTC)))
+
