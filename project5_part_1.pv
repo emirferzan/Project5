@@ -39,14 +39,17 @@ query id_A:id, id_B:id, k:key;
 let A(id_A:id) =
 new Ks:key;
 new N1:nonce;
+(* A requests key translation of session key to Key Translation Center *)
 let M1 = senc((Ks, N1), Kma) in
 event A_requests_key(Ks);
 let I1 = Mac((id_A, N1), Ks) in
 out(c_A_KTC, (id_A, M1, I1));
 
+(* A receives key translation of session key for B and authenticates Key Translation Center *)
 in(c_KTC_A, (id_KTC_:id, M3_:bitstring, I2_:bitstring));
 let (M2_:bitstring, N2_:nonce) = sdec(M3_, Kma) in
 if Mac((id_KTC_, N1, N2_), Ks) = I2_ then event A_authenticates_KTC(id_A, id_KTC_);
+(* A forwards key translation to B *)
 new N3:nonce;
 let I3 = Mac((id_A, N3), Ks) in
 let M4 = senc(nonce_to_bitstring(N3), Ks) in
@@ -55,6 +58,7 @@ out(c_A_B, (id_A, M2_, M4, I3));
 0.
 
 let B(id_B:id) =
+(* B receives key translation from A and authenticates A *)
 in(c_A_B, (id_A_:id, M2_:bitstring, M4_:bitstring, I3_:bitstring));
 let Ks_ = sdec(M2_, Kmb) in
 let N3_ = sdec(M4_, bitstring_to_key(Ks_)) in
@@ -63,9 +67,11 @@ if Mac((id_A_, N3_), bitstring_to_key(Ks_)) = I3_ then event B_authenticates_A(i
 
 let KTC(id_KTC:id) = 
 in(c_A_KTC, (id_A_:id, M1_:bitstring, I1_:bitstring));
+(* Key Translation Center authenticates A by checking if MAC of A's id *)
 let (Ks_:key, N1_:nonce) = sdec(M1_, Kma) in
 if Mac((id_A_, N1_), Ks_) = I1_ then event KTC_authenticates_A(id_A_, id_KTC);
 new N2:nonce;
+(* Key Translation Center creates key translation of session key using B's key for A to forward to B *)
 let I2 = Mac((id_KTC, N1_, N2), Ks_) in
 let M2 = senc(key_to_bitstring(Ks_), Kmb) in
 let M3 = senc((M2, N2), Kma) in
