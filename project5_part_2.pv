@@ -47,17 +47,7 @@ query ks:bitstring, msg:bitstring;
   event(B_receives_session_msg(ks,msg)) ==> event(A_sends_session_msg(ks,msg)).
 
 
-(* -----------------------------
-   Part 1 
-   ----------------------------- *)
 
-(* TODO:
-   - key translation with forwarding
-   - A asks KDC for a session key
-   - KDC sends key info back
-   - A forwards B's part to B
-   - A and B use Ks after checks
-*)
 
 
 (* -----------------------------
